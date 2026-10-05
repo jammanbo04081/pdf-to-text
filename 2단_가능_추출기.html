@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>문단 살려 옮기기 — PDF 텍스트 정리</title>
+<style>
+  :root{
+    --paper:#FBFAF7;
+    --paper-2:#F3F1EC;
+    --ink:#16212B;
+    --ink-soft:#5D6B78;
+    --rule:#D8D4CB;
+    --mark:#B3372C;
+    --mark-soft:#F0DEDA;
+    --join:#2E6F6B;
+    --focus:#2E6F6B;
+    --r:3px;
+    --sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "D2Coding", monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:60rem;margin:0 auto;padding:0 1.5rem 6rem}
+
+  /* ---------- hero ---------- */
+  header{padding:4.5rem 0 2.5rem}
+  h1{
+    font-size:clamp(2rem,5.2vw,3.1rem);
+    line-height:1.15;
+    letter-spacing:-0.035em;
+    font-weight:800;
+    margin:0 0 .9rem;
+  }
+  h1 .cut{
+    position:relative;
+    white-space:nowrap;
+  }
+  h1 .cut::after{
+    content:"";
+    position:absolute;
+    left:-2%;right:-2%;
+    top:52%;
+    height:3px;
+    background:var(--mark);
+    transform:scaleX(var(--sx,1));
+    transform-origin:left center;
+    border-radius:2px;
+  }
+  .lede{
+    max-width:40rem;color:var(--ink-soft);
+    font-size:1.03rem;margin:0;
+  }
+
+  /* demo strip */
+  .demo{
+    margin:2.2rem 0 0;
+    border-top:1px solid var(--rule);
+    border-bottom:1px solid var(--rule);
+    padding:1.4rem 0;
+    font-family:var(--mono);
+    font-size:.86rem;
+    line-height:2;
+    color:var(--ink-soft);
+    overflow:hidden;
+  }
+  .demo b{font-weight:400;color:var(--ink)}
+  .demo .brk{color:var(--mark);font-weight:700}
+  .demo .row{display:block;white-space:pre-wrap}
+  .demo .after{color:var(--ink);display:none}
+  .demo.done .before{display:none}
+  .demo.done .after{display:block}
+
+  /* ---------- drop ---------- */
+  .tray{
+    margin:2.5rem 0 0;
+    border:1.5px dashed var(--rule);
+    border-radius:var(--r);
+    background:#fff;
+    padding:2.6rem 1.5rem;
+    text-align:center;
+    transition:border-color .15s, background .15s;
+  }
+  .tray.over{border-color:var(--join);background:#F4FAF9}
+  .tray p{margin:.4rem 0 0;color:var(--ink-soft);font-size:.92rem}
+  .tray strong{font-size:1.05rem;font-weight:700;color:var(--ink)}
+  .pick{
+    display:inline-block;margin-top:1.1rem;
+    background:var(--ink);color:#fff;border:0;
+    font:inherit;font-weight:600;font-size:.95rem;
+    padding:.62rem 1.3rem;border-radius:var(--r);cursor:pointer;
+  }
+  .pick:hover{background:#27353F}
+  input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+
+  /* ---------- options ---------- */
+  .opts{
+    margin-top:1.6rem;border:1px solid var(--rule);border-radius:var(--r);
+    background:#fff;
+  }
+  .opts summary{
+    cursor:pointer;padding:.85rem 1.1rem;font-weight:600;font-size:.94rem;
+    list-style:none;display:flex;justify-content:space-between;align-items:center;
+  }
+  .opts summary::-webkit-details-marker{display:none}
+  .opts summary::after{content:"펼치기";color:var(--ink-soft);font-weight:400;font-size:.85rem}
+  .opts[open] summary::after{content:"접기"}
+  .opts .body{padding:0 1.1rem 1.1rem;border-top:1px solid var(--rule);padding-top:1rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:.55rem 1.6rem}
+  label.chk{display:flex;gap:.55rem;align-items:flex-start;font-size:.92rem;cursor:pointer;padding:.15rem 0}
+  label.chk input{margin:.35rem 0 0;accent-color:var(--join);flex:none}
+  label.chk span small{display:block;color:var(--ink-soft);font-size:.8rem;line-height:1.5}
+  .rowline{display:flex;flex-wrap:wrap;gap:1.4rem;align-items:center;margin-top:1rem;padding-top:1rem;border-top:1px dotted var(--rule);font-size:.92rem}
+  .rowline label{display:flex;gap:.5rem;align-items:center}
+  select,input[type=text]{
+    font:inherit;font-size:.9rem;padding:.35rem .5rem;border:1px solid var(--rule);
+    border-radius:var(--r);background:#fff;color:var(--ink);
+  }
+  input[type=text]{width:9rem}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+  /* ---------- status ---------- */
+  .status{margin-top:1.4rem;font-size:.92rem;color:var(--ink-soft);min-height:1.4rem}
+  .bar{height:3px;background:var(--paper-2);border-radius:2px;overflow:hidden;margin-top:.6rem;display:none}
+  .bar.on{display:block}
+  .bar i{display:block;height:100%;width:0;background:var(--join);transition:width .2s}
+  .warn{
+    margin-top:1rem;border-left:3px solid var(--mark);background:var(--mark-soft);
+    padding:.75rem .9rem;font-size:.9rem;border-radius:0 var(--r) var(--r) 0;
+  }
+
+  /* ---------- result ---------- */
+  .result{margin-top:2.4rem;display:none}
+  .result.on{display:block}
+  .rhead{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;justify-content:space-between;margin-bottom:.8rem}
+  .stats{font-size:.86rem;color:var(--ink-soft);font-family:var(--mono)}
+  .acts{display:flex;gap:.5rem;flex-wrap:wrap}
+  .acts button{
+    font:inherit;font-size:.88rem;font-weight:600;padding:.45rem .9rem;
+    border:1px solid var(--rule);background:#fff;color:var(--ink);
+    border-radius:var(--r);cursor:pointer;
+  }
+  .acts button:hover{border-color:var(--ink)}
+  .acts button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .acts button.primary:hover{background:#27353F}
+  .tabs{display:flex;gap:0;border-bottom:1px solid var(--rule);margin-bottom:-1px}
+  .tabs button{
+    font:inherit;font-size:.88rem;font-weight:600;background:none;border:0;
+    border-bottom:2px solid transparent;padding:.5rem .9rem;cursor:pointer;color:var(--ink-soft);
+  }
+  .tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--mark)}
+  textarea{
+    width:100%;min-height:26rem;resize:vertical;
+    border:1px solid var(--rule);border-radius:0 var(--r) var(--r) var(--r);
+    background:#fff;padding:1.6rem 1.7rem;
+    font-family:var(--sans);font-size:1rem;line-height:1.85;color:var(--ink);
+    white-space:pre-wrap;
+  }
+  textarea.raw{font-family:var(--mono);font-size:.85rem;line-height:1.9;color:var(--ink-soft)}
+  .toast{
+    position:fixed;left:50%;bottom:2rem;transform:translateX(-50%) translateY(1rem);
+    background:var(--ink);color:#fff;padding:.6rem 1.1rem;border-radius:var(--r);
+    font-size:.9rem;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;
+  }
+  .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  footer{
+    margin-top:4rem;padding-top:1.4rem;border-top:1px solid var(--rule);
+    font-size:.85rem;color:var(--ink-soft);
+  }
+  footer h2{font-size:.9rem;margin:0 0 .5rem;color:var(--ink)}
+  footer ul{margin:0;padding-left:1.1rem}
+  footer li{margin:.25rem 0}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;animation:none !important}
+  }
+  @media (max-width:560px){
+    header{padding:3rem 0 2rem}
+    textarea{padding:1.1rem 1rem}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>PDF에서 긁어온 글,<br><span class="cut" id="cut">문단이 끊기지 않게</span> 옮기기</h1>
+  <p class="lede">PDF를 드래그해서 복사하면 한 줄마다 줄바꿈이 박히고 페이지 번호까지 딸려옵니다. 이 도구는 글자 좌표를 읽어 어디가 진짜 문단의 끝인지 판별하고, 나머지 줄바꿈은 지웁니다. 파일은 브라우저 안에서만 처리되고 어디로도 전송되지 않습니다.</p>
+
+  <div class="demo" id="demo" aria-hidden="true">
+    <span class="before">
+      <span class="row"><b>공정으로서의 정의는 원초적 입장에서 합의된 원칙</b><span class="brk">↵</span></span>
+      <span class="row"><b>을 따른다. 이때 당사자들은 무지의 베일 뒤에</b><span class="brk">↵</span></span>
+      <span class="row"><b>서 선택한다.</b></span>
+      <span class="row"><span class="brk">- 12 -</span></span>
+    </span>
+    <span class="after"><span class="row"><b>공정으로서의 정의는 원초적 입장에서 합의된 원칙을 따른다. 이때 당사자들은 무지의 베일 뒤에서 선택한다.</b></span></span>
+  </div>
+</header>
+
+<main>
+  <div class="tray" id="tray">
+    <strong>PDF를 여기에 놓으세요</strong>
+    <p>여러 개를 놓으면 순서대로 이어 붙입니다. 파일은 업로드되지 않습니다.</p>
+    <button class="pick" id="pick" type="button">PDF 고르기</button>
+    <input type="file" id="file" accept="application/pdf,.pdf" multiple>
+  </div>
+
+  <details class="opts" id="opts">
+    <summary>정리 규칙</summary>
+    <div class="body">
+      <div class="grid">
+        <label class="chk"><input type="checkbox" id="o-hf" checked><span>머리말·꼬리말·페이지 번호 빼기<small>위아래 여백에서 반복되는 줄과 쪽 번호를 찾아 지웁니다</small></span></label>
+        <label class="chk"><input type="checkbox" id="o-md" checked><span>제목을 마크다운으로<small>큰 글씨 줄 앞에 #을 붙입니다. 끄면 제목만 따로 줄을 띄웁니다</small></span></label>
+        <label class="chk"><input type="checkbox" id="o-ksp" checked><span>한글 줄 이을 때 띄어쓰기 넣기<small>대부분의 한글 문서는 어절 단위로 줄이 넘어갑니다. 단어가 붙어 나오면 이걸 끄세요</small></span></label>
+        <label class="chk"><input type="checkbox" id="o-hy" checked><span>영문 하이픈 단어 붙이기<small>줄 끝 exam- 과 다음 줄 ple 을 example 로 합칩니다</small></span></label>
+        <label class="chk"><input type="checkbox" id="o-fn"><span>각주·캡션 등 작은 글씨 빼기<small>본문보다 뚜렷하게 작은 글씨를 버립니다</small></span></label>
+        <label class="chk"><input type="checkbox" id="o-blank" checked><span>문단 사이 빈 줄 넣기<small>끄면 문단마다 줄만 바꿉니다</small></span></label>
+      </div>
+      <div class="rowline">
+        <label>단 나눔
+          <select id="o-col">
+            <option value="auto" selected>자동으로 판단</option>
+            <option value="1">1단</option>
+            <option value="2">2단</option>
+          </select>
+        </label>
+        <label>페이지 범위
+          <input type="text" id="o-range" placeholder="예: 3-15, 20" aria-label="페이지 범위">
+        </label>
+      </div>
+    </div>
+  </details>
+
+  <div class="status" id="status" role="status" aria-live="polite"></div>
+  <div class="bar" id="bar"><i></i></div>
+  <div id="warnbox"></div>
+
+  <section class="result" id="result" aria-label="정리 결과">
+    <div class="rhead">
+      <div class="tabs" role="tablist">
+        <button role="tab" id="tab-clean" aria-selected="true" aria-controls="out">정리본</button>
+        <button role="tab" id="tab-raw" aria-selected="false" aria-controls="out">줄 그대로</button>
+      </div>
+      <div class="acts">
+        <button type="button" id="btn-copy" class="primary">복사</button>
+        <button type="button" id="btn-txt">.txt 저장</button>
+        <button type="button" id="btn-md">.md 저장</button>
+      </div>
+    </div>
+    <textarea id="out" spellcheck="false" aria-label="결과 텍스트"></textarea>
+    <div class="stats" id="stats"></div>
+  </section>
+</main>
+
+<footer>
+  <h2>줄바꿈을 지울지 남길지 판단하는 기준</h2>
+  <ul>
+    <li>2단·3단으로 짜인 문서는 왼쪽 단을 끝까지 읽은 뒤 오른쪽 단으로 넘어갑니다. 단을 가로지르는 제목이 중간에 끼어 있어도 순서가 흐트러지지 않습니다.</li>
+    <li>앞줄이 오른쪽 끝까지 찼으면 문단이 이어지는 중입니다. 페이지가 바뀌어도, 단이 바뀌어도 이어 붙입니다.</li>
+    <li>앞줄이 눈에 띄게 짧게 끝나고 마침표로 닫혔거나, 다음 줄이 들여쓰기로 시작하거나, 줄 간격이 갑자기 벌어지면 문단이 끝난 것으로 봅니다.</li>
+    <li>본문보다 큰 글씨, 가운데 정렬된 짧은 줄, 번호로 시작하는 짧은 줄은 제목으로 남깁니다.</li>
+    <li>글머리 기호(•, 1., 가., ①)로 시작하는 줄은 항목마다 줄을 나눕니다.</li>
+    <li>스캔한 PDF처럼 글자 정보가 없는 파일은 옮길 수 없습니다. 이 경우 OCR이 필요합니다.</li>
+  </ul>
+</footer>
+
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+const CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/";
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = CDN + "pdf.worker.min.js";
+
+const $ = id => document.getElementById(id);
+const els = {
+  tray:$("tray"), pick:$("pick"), file:$("file"), status:$("status"), bar:$("bar"),
+  warn:$("warnbox"), result:$("result"), out:$("out"), stats:$("stats"), toast:$("toast"),
+  opts:$("opts")
+};
+
+/* ============ 히어로 데모 ============ */
+(function demo(){
+  const d = $("demo"), cut = $("cut");
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+    d.classList.add("done"); cut.style.setProperty("--sx",0); return;
+  }
+  cut.style.setProperty("--sx",1);
+  setTimeout(()=>{
+    let t0=null;
+    (function step(ts){
+      if(!t0) t0=ts;
+      const p = Math.min((ts-t0)/420,1);
+      cut.style.setProperty("--sx", String(1-p));
+      if(p<1) requestAnimationFrame(step); else d.classList.add("done");
+    })(performance.now());
+  }, 1100);
+})();
+
+/* ============ 옵션 ============ */
+function opts(){
+  return {
+    stripHF: $("o-hf").checked,
+    md: $("o-md").checked,
+    hangulSpace: $("o-ksp").checked,
+    dehyphen: $("o-hy").checked,
+    dropSmall: $("o-fn").checked,
+    blankLine: $("o-blank").checked,
+    columns: $("o-col").value,
+    range: $("o-range").value.trim()
+  };
+}
+function parseRange(s, max){
+  if(!s) return null;
+  const set = new Set();
+  s.split(/[,\s]+/).forEach(part=>{
+    const m = part.match(/^(\d+)\s*[-~]\s*(\d+)$/);
+    if(m){ for(let i=Math.min(+m[1],+m[2]); i<=Math.max(+m[1],+m[2]); i++) if(i>=1&&i<=max) set.add(i); }
+    else if(/^\d+$/.test(part)){ const n=+part; if(n>=1&&n<=max) set.add(n); }
+  });
+  return set.size ? set : null;
+}
+
+/* ============ 문자 조각 추출 ============ */
+function itemSize(it){
+  const s = Math.hypot(it.transform[2], it.transform[3]);
+  return s > 0.1 ? s : (it.height || 10);
+}
+function pageItems(tcItems, pageH){
+  const out = [];
+  for(const it of tcItems){
+    if(!it.str || !it.str.trim()) continue;
+    const s = itemSize(it);
+    const w = (it.width && it.width > 0) ? it.width : it.str.length * s * 0.5;
+    const x = it.transform[4];
+    const top = pageH - it.transform[5];
+    // 실행 안에 넓은 공백이 있으면 조각으로 쪼갠다. 단 사이가 붙어버리는 것을 막는다.
+    const parts = it.str.split(/(\s{2,})/);
+    if(parts.length > 1 && w > s){
+      let acc = 0;
+      const perChar = w / Math.max(1, it.str.length);
+      for(const p of parts){
+        const pw = p.length * perChar;
+        if(p.trim()) out.push({ x0:x+acc, x1:x+acc+pw, top, size:s, str:p, font:it.fontName||"" });
+        acc += pw;
+      }
+    } else {
+      out.push({ x0:x, x1:x+w, top, size:s, str:it.str, font:it.fontName||"" });
+    }
+  }
+  return out;
+}
+
+/* ============ XY-cut: 페이지를 읽는 순서대로 영역 분할 ============ */
+function emptyRuns(intervals, lo, hi, minW){
+  const n = Math.ceil(hi - lo) + 2;
+  if(n <= 2) return [];
+  const occ = new Uint8Array(n);
+  for(const [a,b] of intervals){
+    const s = Math.max(0, Math.floor(a - lo)), e = Math.min(n-1, Math.ceil(b - lo));
+    for(let i=s;i<=e;i++) occ[i] = 1;
+  }
+  const runs = []; let start = -1;
+  for(let i=0;i<n;i++){
+    if(!occ[i]){ if(start < 0) start = i; }
+    else if(start >= 0){ runs.push([start+lo, i-1+lo]); start = -1; }
+  }
+  if(start >= 0) runs.push([start+lo, n-1+lo]);
+  return runs.filter(r => r[0] > lo && r[1] < hi && (r[1]-r[0]) >= minW);
+}
+function distinctRows(items){
+  const s = new Set();
+  for(const i of items) s.add(Math.round(i.top/3));
+  return s.size;
+}
+function xycut(items, body, mode, depth){
+  if(items.length < 2 || depth > 7) return items.length ? [items] : [];
+  let x0=Infinity, x1=-Infinity, y0=Infinity, y1=-Infinity;
+  for(const i of items){
+    if(i.x0<x0) x0=i.x0; if(i.x1>x1) x1=i.x1;
+    if(i.top<y0) y0=i.top; if(i.top+i.size>y1) y1=i.top+i.size;
+  }
+  // 1) 세로 자르기 = 단 나누기
+  if(mode !== "1"){
+    const minGap = mode === "2" ? Math.max(body*0.6, 6) : Math.max(body*1.1, 9);
+    const runs = emptyRuns(items.map(i=>[i.x0,i.x1]), x0, x1, minGap)
+                 .sort((a,b)=> (b[1]-b[0]) - (a[1]-a[0]));
+    for(const r of runs){
+      const cut = (r[0]+r[1])/2;
+      const L=[], R=[];
+      for(const i of items) ((i.x0+i.x1)/2 < cut ? L : R).push(i);
+      if(distinctRows(L) >= 3 && distinctRows(R) >= 3){
+        const ext = g => { let a=Infinity,b=-Infinity; for(const i of g){ if(i.top<a)a=i.top; if(i.top>b)b=i.top; } return b-a; };
+        if(ext(L) >= body*2.5 && ext(R) >= body*2.5)
+          return xycut(L, body, mode, depth+1).concat(xycut(R, body, mode, depth+1));
+      }
+    }
+  }
+  // 2) 가로 자르기 = 문단 덩어리.
+  //    기준값을 문서 전체에서 빌려오지 않고 이 영역 안의 줄 간격 분포에서 직접 잡는다.
+  //    줄 간격이 촘촘하든 널찍하든 "평소보다 확연히 벌어진 곳"만 자른다.
+  const runs = emptyRuns(items.map(i=>[i.top, i.top+i.size]), y0, y1, 0);
+  if(runs.length){
+    const w = runs.map(r=>r[1]-r[0]).sort((a,b)=>a-b);
+    const med = w[Math.floor(w.length/2)];
+    const T = Math.max(med*1.7 + 1, med + body*0.5, 2);
+    const cuts = runs.filter(r => (r[1]-r[0]) >= T).sort((a,b)=>a[0]-b[0]);
+    if(cuts.length){
+      const bands = []; let prev = y0 - 1;
+      for(const r of cuts){
+        const b = items.filter(i => i.top > prev && i.top <= r[0]);
+        if(b.length) bands.push(b);
+        prev = r[1];
+      }
+      const tail = items.filter(i => i.top > prev);
+      if(tail.length) bands.push(tail);
+      if(bands.length > 1){
+        let out = [];
+        for(const b of bands) out = out.concat(xycut(b, body, mode, depth+1));
+        return out;
+      }
+    }
+  }
+  return [items];
+}
+
+/* ============ 영역 안에서 줄 묶기 ============ */
+function toLines(items){
+  items = items.slice().sort((a,b)=> (a.top - b.top) || (a.x0 - b.x0));
+  const groups = [];
+  for(const it of items){
+    const g = groups[groups.length-1];
+    if(g && Math.abs(g.top - it.top) <= Math.max(1.6, 0.45*Math.max(it.size, g.sMax))){
+      g.items.push(it); g.sMax = Math.max(g.sMax, it.size);
+    } else groups.push({ top: it.top, sMax: it.size, items: [it] });
+  }
+  const out = [];
+  for(const g of groups){
+    g.items.sort((a,b)=> a.x0 - b.x0);
+    let text = "", end = null;
+    for(const it of g.items){
+      if(end !== null && it.x0 - end > 0.22*it.size && !/\s$/.test(text) && !/^\s/.test(it.str)) text += " ";
+      text += it.str; end = it.x1;
+    }
+    text = clean(text);
+    if(!text) continue;
+    const sh = new Map(), fh = new Map();
+    for(const it of g.items){
+      const k = Math.round(it.size*2)/2;
+      sh.set(k, (sh.get(k)||0)+it.str.length);
+      fh.set(it.font, (fh.get(it.font)||0)+it.str.length);
+    }
+    out.push({
+      top: g.top, text,
+      x0: Math.min(...g.items.map(i=>i.x0)),
+      x1: Math.max(...g.items.map(i=>i.x1)),
+      size: Number(mode(sh)), font: mode(fh)
+    });
+  }
+  return out;
+}
+function mode(map){ let best=null,n=-1; for(const [k,v] of map) if(v>n){n=v;best=k;} return best; }
+function clean(s){
+  return s.replace(/\u00AD/g,"").replace(/[\u200B-\u200D\uFEFF]/g,"")
+          .replace(/\u00A0/g," ").replace(/\uFB01/g,"fi").replace(/\uFB02/g,"fl")
+          .replace(/[\t\r\n]+/g," ").replace(/ {2,}/g," ").trim();
+}
+
+/* ============ PDF 읽기 ============ */
+async function readPdf(file, onProgress){
+  const task = pdfjsLib.getDocument({
+    data: await file.arrayBuffer(),
+    cMapUrl: CDN + "cmaps/", cMapPacked: true,
+    standardFontDataUrl: CDN + "standard_fonts/", isEvalSupported: false
+  });
+  const pdf = await task.promise;
+  const range = parseRange(opts().range, pdf.numPages);
+  const pages = [];
+  for(let p=1; p<=pdf.numPages; p++){
+    if(range && !range.has(p)){ onProgress(p, pdf.numPages); continue; }
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({scale:1});
+    const tc = await page.getTextContent();
+    pages.push({ num:p, width:vp.width, height:vp.height, items: pageItems(tc.items, vp.height) });
+    page.cleanup();
+    onProgress(p, pdf.numPages);
+    if(p % 4 === 0) await new Promise(r=>setTimeout(r,0));
+  }
+  return pages;
+}
+
+/* ============ 페이지별 기준값 ============ */
+function pageMetrics(items){
+  if(!items.length) return { body:10 };
+  const h = new Map();
+  for(const i of items){
+    const k = Math.round(i.size*2)/2;
+    h.set(k, (h.get(k)||0) + i.str.length);
+  }
+  return { body: Number(mode(h)) || 10 };
+}
+
+/* ============ 머리말·꼬리말 ============ */
+const norm = t => t.replace(/\d+/g,"#").replace(/\s+/g,"").slice(0,80);
+function isPageNo(t){
+  const s = t.replace(/\s+/g,"").replace(/^[-–—[(]+|[-–—\])]+$/g,"");
+  if(!s) return true;
+  if(/^\d{1,4}$/.test(s) || /^\d{1,4}\/\d{1,4}$/.test(s)) return true;
+  if(/^(제)?\d{1,4}(쪽|페이지|면|頁|ページ)$/.test(s)) return true;
+  if(/^(page|p\.?)\s*\d{1,4}$/i.test(t.trim())) return true;
+  return /^[ivxlcdm]{1,7}$/i.test(s);
+}
+function stripHF(pages){
+  const hist = new Map(), zones = [];
+  for(const pg of pages){
+    const z = pg.lines.filter(l => l.top < pg.height*0.085 || l.top > pg.height*0.915);
+    zones.push(new Set(z));
+    const seen = new Set();
+    for(const l of z){
+      const k = norm(l.text);
+      if(!k || seen.has(k)) continue;
+      seen.add(k); hist.set(k, (hist.get(k)||0)+1);
+    }
+  }
+  const n = pages.length, th = n >= 4 ? Math.max(2, Math.ceil(n*0.3)) : 2;
+  let removed = 0;
+  pages.forEach((pg,i)=>{
+    pg.lines = pg.lines.filter(l=>{
+      if(!zones[i].has(l)) return true;
+      const rep = n >= 2 && (hist.get(norm(l.text))||0) >= th && l.text.length < 90;
+      if(isPageNo(l.text) || rep){ removed++; return false; }
+      return true;
+    });
+  });
+  return removed;
+}
+
+/* ============ 문서 지표 ============ */
+const CJK_RE = /[\u3000-\u303F\u3040-\u30FF\u31F0-\u31FF\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\uFF00-\uFF9F]/;
+const HAN_RE = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F]/;
+
+function measure(lines){
+  const sh = new Map(), fh = new Map();
+  let cjk = 0, tot = 0;
+  for(const l of lines){
+    const k = Math.round(l.size*2)/2;
+    sh.set(k, (sh.get(k)||0)+l.text.length);
+    fh.set(l.font, (fh.get(l.font)||0)+l.text.length);
+    for(const ch of l.text){ tot++; if(CJK_RE.test(ch)) cjk++; }
+  }
+  const body = Number(mode(sh)) || 10;
+  const bodyFont = mode(fh);
+  const cjkDoc = tot > 0 && cjk/tot > 0.3;
+  const bl = lines.filter(l => Math.abs(l.size-body) <= Math.max(0.6, body*0.06));
+
+  // 왼쪽 끝을 기준으로 단(段)을 묶는다
+  for(const l of lines) l.ck = Math.round(l.x0/6)*6;
+  const cnt = new Map();
+  for(const l of bl) cnt.set(l.ck, (cnt.get(l.ck)||0)+1);
+  const big = [...cnt.entries()].filter(([,v])=>v>=8).map(([k])=>k);
+  if(big.length){
+    for(const l of lines){
+      if(cnt.get(l.ck) >= 8) continue;
+      let best=null, d=27;
+      for(const k of big){ const dd = Math.abs(k-l.ck); if(dd < d){ d=dd; best=k; } }
+      if(best !== null) l.ck = best;
+    }
+  }
+  const cm = new Map();
+  const keys = new Set(bl.map(l=>l.ck));
+  for(const k of keys){
+    const arr = bl.filter(l=>l.ck===k);
+    const xs = arr.map(l=>l.x1).sort((a,b)=>a-b);
+    const right = xs[Math.min(xs.length-1, Math.floor(xs.length*0.93))];
+    const lh = new Map();
+    arr.forEach(l=>{ const q = Math.round(l.x0/2)*2; lh.set(q,(lh.get(q)||0)+1); });
+    const left = Number(mode(lh));
+    const near = arr.filter(l => l.x1 > right - body*0.7).length / arr.length;
+    cm.set(k, { left, right, width: Math.max(1, right-left), just: near > 0.5 });
+  }
+  const fallback = cm.values().next().value || { left:0, right:500, width:500, just:false };
+
+  const gaps = [];
+  for(let i=1;i<bl.length;i++){
+    const a=bl[i-1], b=bl[i];
+    if(a.page===b.page && a.ck===b.ck){
+      const g = b.top - a.top;
+      if(g > body*0.55 && g < body*3.4) gaps.push(g);
+    }
+  }
+  gaps.sort((a,b)=>a-b);
+  const leading = gaps.length ? gaps[Math.floor(gaps.length/2)] : body*1.5;
+  return { body, bodyFont, cm, fallback, leading, cjkDoc };
+}
+
+/* ============ 줄 분류 ============ */
+const LIST = /^\s*(?:[•▪◦‣·※○●〇□■◆▶▷▋◇☆★]\s*|・|[-–—*]\s+|\(?\d{1,2}[).]\s+|\(?[가-힣][).]\s+|[①-⑳㉑-㉟]\s*|[ivxIVX]{1,4}[).]\s+|[a-zA-Z][).]\s+)/;
+const NUMHEAD = /^(?:제?\s*\d{1,3}\s*[장절편부과]\b|第\s*\d{1,3}\s*[章節話]|\d{1,2}(?:\.\d{1,2}){0,3}\.?\s+\S|[IVXLC]{1,5}\.\s+\S)/;
+const TERMINAL = /[.!?。．？！…]["'”’」』）)\]]*$|[다요음임함됨죠네][.!?]?$|[:;：]$/;
+
+function classify(lines, m){
+  for(const l of lines){
+    const c = m.cm.get(l.ck) || m.fallback;
+    const w = l.x1 - l.x0, ratio = l.size / m.body;
+    const short = w < c.width*0.72;
+    const centered = Math.abs((l.x0+l.x1)/2 - (c.left+c.right)/2) < m.body*1.1
+                      && l.x0 > c.left + m.body*0.9 && short;
+    l.small = ratio < 0.86;
+    l.list = LIST.test(l.text);
+    let h = 0;
+    if(ratio >= 1.55) h = 1;
+    else if(ratio >= 1.3) h = 2;
+    else if(ratio >= 1.14) h = 3;
+    else if(!l.list && short && l.text.length <= 60 && ratio >= 0.97 && (NUMHEAD.test(l.text) || centered))
+      h = NUMHEAD.test(l.text) ? 3 : 2;
+    if(h && l.text.length > 90) h = 0;
+    l.heading = h;
+    l.type = h ? "h" : (l.list ? "li" : "p");
+  }
+}
+
+/* ============ 문단 재조립 ============ */
+function makeRules(m){
+  const endsShort = l => {
+    const c = m.cm.get(l.ck) || m.fallback;
+    const slack = c.just ? m.body*1.3 : (m.cjkDoc ? m.body*2.2 : Math.max(m.body*2.2, c.width*0.13));
+    return l.x1 < c.right - slack;
+  };
+  const isNew = (p, l) => {
+    if(l.list) return true;
+    if(p.region !== l.region){
+      // 쪽이 바뀌었거나, 같은 쪽인데 글이 위로 되돌아갔다면 = 다음 단으로 넘어간 것.
+      // 이때만 앞줄이 꽉 찼는지 보고 이어붙인다. 그 밖에는 실제로 빈 줄이 있었다는 뜻.
+      const jumped = (p.page !== l.page) || (l.top < p.top - m.body);
+      return jumped ? endsShort(p) : true;
+    }
+    const c = m.cm.get(l.ck) || m.fallback;
+    const g = l.top - p.top;
+    if(g > m.leading*1.42) return true;
+    if(l.x0 > c.left + m.body*0.65) return true;
+    if(endsShort(p)){
+      if(TERMINAL.test(p.text)) return true;
+      if(g > m.leading*1.12) return true;
+      if(p.x1 < c.right - c.width*0.3) return true;
+    }
+    return false;
+  };
+  return { endsShort, isNew };
+}
+function joinText(a, b, o){
+  a = a.replace(/\s+$/,""); b = b.replace(/^\s+/,"");
+  if(!a) return b;
+  if(!b) return a;
+  if(o.dehyphen && /[A-Za-z]-$/.test(a) && /^[a-z]/.test(b)) return a.slice(0,-1)+b;
+  const la = a.slice(-1), fb = b.charAt(0);
+  if(CJK_RE.test(la) && (CJK_RE.test(fb) || HAN_RE.test(fb))) return a+b;
+  if(HAN_RE.test(la) && CJK_RE.test(fb)) return a+b;
+  if(/^[.,;:!?)\]}%”’」』]/.test(fb)) return a+b;
+  if(/[([{“‘「『]$/.test(la)) return a+b;
+  if(HAN_RE.test(la) && HAN_RE.test(fb)) return o.hangulSpace ? a+" "+b : a+b;
+  return a+" "+b;
+}
+function assemble(lines, m, o){
+  const R = makeRules(m), blocks = [];
+  let cur = null;
+  const push = ()=>{ if(cur && cur.text.trim()) blocks.push(cur); cur = null; };
+  for(const l of lines){
+    if(o.dropSmall && l.small && l.type === "p") continue;
+    if(l.type === "h"){ push(); blocks.push({type:"h", level:l.heading, text:l.text}); continue; }
+    if(!cur || cur.type !== l.type || R.isNew(cur.last, l)){
+      push(); cur = { type:l.type, text:l.text, last:l };
+    } else {
+      cur.text = joinText(cur.text, l.text, o); cur.last = l;
+    }
+  }
+  push();
+  return blocks;
+}
+function tidy(s){
+  return s.replace(/ {2,}/g," ")
+          .replace(/\s+([,.;:!?%’”」』\)\]])/g,"$1")
+          .replace(/([(\[「『“‘])\s+/g,"$1").trim();
+}
+function render(blocks, o){
+  const out = []; let prev = null;
+  for(const b of blocks){
+    const s = tidy(b.text);
+    if(!s) continue;
+    if(b.type === "h"){
+      if(out.length) out.push("");
+      out.push(o.md ? "#".repeat(Math.min(6, b.level+1))+" "+s : s);
+      out.push("");
+    } else if(b.type === "li"){
+      if(prev && prev !== "li" && out.length && out[out.length-1] !== "") out.push("");
+      out.push(s);
+    } else {
+      if(out.length && out[out.length-1] !== "" && o.blankLine) out.push("");
+      out.push(s);
+      if(o.blankLine) out.push("");
+    }
+    prev = b.type;
+  }
+  return out.join("\n").replace(/\n{3,}/g,"\n\n").trim()+"\n";
+}
+
+/* ============ 파이프라인 ============ */
+let cache = null;
+
+function run(){
+  if(!cache || !cache.pages.length) return;
+  const o = opts();
+  const pages = [];
+  for(const p of cache.pages){
+    const pm = pageMetrics(p.items);
+    const regions = xycut(p.items, pm.body, o.columns, 0);
+    const lines = [];
+    regions.forEach((r, ri)=>{
+      for(const l of toLines(r)){ l.page = p.num; l.region = p.num*1000+ri; lines.push(l); }
+    });
+    pages.push({ num:p.num, height:p.height, lines });
+  }
+  const removed = o.stripHF ? stripHF(pages) : 0;
+
+  const lines = [];
+  for(const p of pages) for(const l of p.lines) lines.push(l);
+  if(!lines.length){ show("", 0, 0, pages.length); return; }
+
+  const m = measure(lines);
+  classify(lines, m);
+  const blocks = assemble(lines, m, o);
+  cache.clean = render(blocks, o);
+  cache.raw = pages.map(p => p.lines.map(l=>l.text).join("\n")).join("\n\n");
+  cache.cols = m.cm.size;
+  show(cache.clean, blocks.filter(b=>b.type!=="h").length, removed, pages.length);
+}
+
+function show(text, paras, removed, pageCount){
+  els.result.classList.add("on");
+  els.out.value = currentTab === "raw" ? (cache.raw||"") : text;
+  const chars = text.replace(/\s/g,"").length;
+  els.stats.textContent = `${pageCount}쪽 · 문단 ${paras}개 · 공백 제외 ${chars.toLocaleString()}자`
+    + (cache.cols > 1 ? ` · 단 ${cache.cols}개 인식` : "")
+    + (removed ? ` · 머리말·꼬리말 ${removed}줄 제거` : "");
+}
+
+let currentTab = "clean";
+function setTab(t){
+  currentTab = t;
+  $("tab-clean").setAttribute("aria-selected", String(t==="clean"));
+  $("tab-raw").setAttribute("aria-selected", String(t==="raw"));
+  els.out.classList.toggle("raw", t==="raw");
+  if(cache) els.out.value = t==="raw" ? (cache.raw||"") : (cache.clean||"");
+}
+$("tab-clean").onclick = ()=>setTab("clean");
+$("tab-raw").onclick = ()=>setTab("raw");
+
+/* ============ 입력 ============ */
+async function handle(files){
+  const list = Array.from(files).filter(f => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+  if(!list.length){ setStatus("PDF 파일만 읽을 수 있습니다."); return; }
+  els.warn.innerHTML = "";
+  els.bar.classList.add("on");
+  cache = { pages:[], names:[] };
+  try{
+    for(let i=0;i<list.length;i++){
+      const f = list[i];
+      setStatus(`${f.name} 읽는 중…`);
+      const pages = await readPdf(f, (p,total)=>{
+        els.bar.firstElementChild.style.width = (((i + p/total)/list.length)*100).toFixed(1)+"%";
+        if(p % 3 === 0 || p === total) setStatus(`${f.name} — ${p}/${total}쪽`);
+      });
+      cache.pages.push(...pages);
+      cache.names.push(f.name);
+    }
+    const chars = cache.pages.reduce((n,p)=> n + p.items.reduce((a,i)=>a+i.str.length,0), 0);
+    if(chars < cache.pages.length*20){
+      els.warn.innerHTML = '<div class="warn">글자 정보가 거의 없습니다. 스캔한 이미지 PDF로 보입니다. 이런 파일은 OCR로 글자를 먼저 인식해야 옮길 수 있습니다.</div>';
+    }
+    setStatus(`${cache.names.join(", ")} · ${cache.pages.length}쪽 읽음`);
+    run();
+    els.result.scrollIntoView({behavior:"smooth", block:"start"});
+  }catch(e){
+    console.error(e);
+    setStatus("");
+    els.warn.innerHTML = '<div class="warn">파일을 열지 못했습니다. 암호가 걸린 PDF이거나 파일이 손상됐을 수 있습니다.</div>';
+  }finally{
+    els.bar.classList.remove("on");
+    els.bar.firstElementChild.style.width = "0";
+  }
+}
+function setStatus(s){ els.status.textContent = s; }
+
+els.pick.onclick = ()=> els.file.click();
+els.file.onchange = e => { handle(e.target.files); e.target.value = ""; };
+["dragenter","dragover"].forEach(ev=> window.addEventListener(ev, e=>{ e.preventDefault(); els.tray.classList.add("over"); }));
+["dragleave","drop"].forEach(ev=> window.addEventListener(ev, e=>{ e.preventDefault(); if(ev==="drop"||e.relatedTarget===null) els.tray.classList.remove("over"); }));
+window.addEventListener("drop", e=>{ if(e.dataTransfer && e.dataTransfer.files.length) handle(e.dataTransfer.files); });
+els.opts.addEventListener("change", ()=>{ if(cache) run(); });
+
+/* ============ 내보내기 ============ */
+function toast(msg){
+  els.toast.textContent = msg;
+  els.toast.classList.add("on");
+  setTimeout(()=>els.toast.classList.remove("on"), 1600);
+}
+$("btn-copy").onclick = async ()=>{
+  try{ await navigator.clipboard.writeText(els.out.value); toast("복사했습니다"); }
+  catch{ els.out.select(); document.execCommand("copy"); toast("복사했습니다"); }
+};
+function download(ext){
+  const base = (cache && cache.names[0]) ? cache.names[0].replace(/\.pdf$/i,"") : "문서";
+  const blob = new Blob([els.out.value], {type:"text/plain;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = base+"."+ext; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}
+$("btn-txt").onclick = ()=>download("txt");
+$("btn-md").onclick = ()=>download("md");
+
+})();
+</script>
+</body>
+</html>
